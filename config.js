@@ -1,8 +1,6 @@
-// Couple Space – einzige zentrale Konfiguration.
-//
-// Die Firebase-Web-Konfiguration darf in einer statischen Website stehen.
-// Niemals Admin-SDK-Schlüssel, Service-Account-Dateien oder private Schlüssel
-// in dieses Projekt kopieren.
+// 个人日程 – Firebase Web 配置。
+// 继续复用现有 Firebase 项目，因此上传 GitHub Pages 后即可同步数据。
+// workspaceKey 仅用于兼容已经部署的 Firestore 命名空间，不会显示在界面中。
 export const CONFIG = {
     firebase: {
         apiKey: "AIzaSyC4k7NNIpq3o6tH7V0DZ4-StpnUjQ8g3bo",
@@ -12,16 +10,5 @@ export const CONFIG = {
         messagingSenderId: "813830515159",
         appId: "1:813830515159:web:65f99b6d2a4e5f80530392"
     },
-
-    // Beide Geräte lesen und schreiben genau diesen gemeinsamen Firestore-Raum.
-    coupleId: "yaoyu-daria",
-
-    // Spielerischer Zugangsschutz für die Personenauswahl.
-    // Diese PINs stehen in einer statischen Website und sind daher kein Ersatz
-    // für ein echtes Benutzerkonto. Für euren privaten, nicht geteilten Link
-    // verhindern sie aber ein versehentliches Auswählen der falschen Person.
-    users: {
-        Yaoyu: { pin: "0729", avatar: "Y" },
-        Daria: { pin: "1016", avatar: "D" }
-    }
+    workspaceKey: "eWFveXUtZGFyaWE="
 };

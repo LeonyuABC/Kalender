@@ -1,22 +1,26 @@
-// Eigener Cache-Schlüssel, damit eine ältere reine localStorage-Version nicht
-// überschrieben wird. Alte Daten können per JSON-Backup importiert werden.
-const STORAGE_KEY = "coupleSpaceCloudCacheV1";
-const IDENTITIES = ["Yaoyu", "Daria"];
-const SHARED_COLLECTIONS = ["invitations", "plans", "diaryEntries", "wishlistItems", "moods", "notifications"];
+const STORAGE_KEY = "personalWorkspaceCacheV1";
+const COLLECTIONS = ["plans", "diaryEntries", "wishlistItems"];
+const KINDS = {
+    calendar: "calendar-event-v1",
+    daily: "daily-plan-v1",
+    journal: "journal-entry-v1",
+    wish: "wish-item-v1"
+};
+
+const ALLOWED_KINDS = {
+    plans: new Set([KINDS.calendar, KINDS.daily]),
+    diaryEntries: new Set([KINDS.journal]),
+    wishlistItems: new Set([KINDS.wish])
+};
 
 let syncDiffHandler = null;
-let replaceAllHandler = null;
 
-function emptyData(identity = null) {
+function emptyData() {
     return {
         version: 1,
-        currentIdentity: IDENTITIES.includes(identity) ? identity : null,
-        invitations: [],
         plans: [],
         diaryEntries: [],
-        wishlistItems: [],
-        moods: [],
-        notifications: []
+        wishlistItems: []
     };
 }
 
@@ -24,208 +28,71 @@ function isRecord(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function cleanArray(value) {
+function cleanCollection(name, value) {
     if (!Array.isArray(value)) return [];
-    return value.filter((item) => isRecord(item) && typeof item.id === "string" && item.id.length <= 1000);
+    return value.filter((item) => isRecord(item)
+        && typeof item.id === "string"
+        && item.id.length > 0
+        && item.id.length <= 1000
+        && ALLOWED_KINDS[name]?.has(item.kind));
 }
 
 export function normalizeData(value) {
     const clean = emptyData();
-    if (!isRecord(value) || value.version !== 1) return clean;
-    clean.currentIdentity = IDENTITIES.includes(value.currentIdentity) ? value.currentIdentity : null;
-    SHARED_COLLECTIONS.forEach((name) => { clean[name] = cleanArray(value[name]); });
+    if (!isRecord(value)) return clean;
+    COLLECTIONS.forEach((name) => {
+        clean[name] = cleanCollection(name, value[name]);
+    });
     return clean;
 }
 
 export function loadData() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return emptyData();
-        return normalizeData(JSON.parse(raw));
+        return raw ? normalizeData(JSON.parse(raw)) : emptyData();
     } catch (error) {
-        console.warn("Lokaler Zwischenspeicher konnte nicht gelesen werden.", error);
+        console.warn("本地数据读取失败。", error);
         return emptyData();
     }
 }
 
 function saveLocalData(data) {
-    const clean = normalizeData({ ...data, version: 1 });
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeData(data)));
         return true;
     } catch (error) {
-        console.error("Lokaler Zwischenspeicher konnte nicht geschrieben werden.", error);
+        console.error("本地数据保存失败。", error);
         return false;
     }
 }
 
-// Speichert nur den lokalen Spiegel. Für einen vollständigen Cloud-Ersatz
-// (zum Beispiel Backup-Import) replaceSharedData() verwenden.
-export function saveData(data) {
-    return saveLocalData(data);
-}
-
-export function configureCloudStorage({ syncDiff, replaceAll }) {
+export function configureCloudStorage({ syncDiff }) {
     syncDiffHandler = typeof syncDiff === "function" ? syncDiff : null;
-    replaceAllHandler = typeof replaceAll === "function" ? replaceAll : null;
 }
 
 export function applyCloudCollection(name, items) {
-    if (!SHARED_COLLECTIONS.includes(name)) return;
+    if (!COLLECTIONS.includes(name)) return;
     const data = loadData();
-    data[name] = cleanArray(items).map((item) => {
+    data[name] = cleanCollection(name, items).map((item) => {
         const { cloudUpdatedAt, ...record } = item;
         return record;
     });
     saveLocalData(data);
-    window.dispatchEvent(new CustomEvent("couple-space-cloud-data", { detail: { collection: name } }));
+    window.dispatchEvent(new CustomEvent("personal-workspace-cloud-data", {
+        detail: { collection: name }
+    }));
 }
 
 export function updateData(change) {
     const before = loadData();
-    const draft = JSON.parse(JSON.stringify(before));
+    const draft = structuredClone(before);
     const changed = change(draft) || draft;
-    appendChangeNotifications(before, changed);
-    pruneNotifications(changed);
-    const after = normalizeData({ ...changed, version: 1 });
+    const after = normalizeData(changed);
     if (!saveLocalData(after)) throw new Error("STORAGE_WRITE_FAILED");
     if (syncDiffHandler) {
-        Promise.resolve(syncDiffHandler(before, after)).catch(() => {
-            // Der Synchronisationsstatus wird von cloud.js sichtbar gemeldet.
-        });
+        Promise.resolve(syncDiffHandler(before, after)).catch(() => {});
     }
     return after;
-}
-
-function itemMap(items) {
-    return new Map((Array.isArray(items) ? items : []).map((item) => [item.id, item]));
-}
-
-function sameValue(left, right) {
-    return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function notificationMessage(collectionName, beforeItem, afterItem, actor) {
-    if (collectionName === "invitations") {
-        if (!beforeItem) return `${actor} hat eine ältere Einladung hinzugefügt.`;
-        return `${actor} hat eine ältere Einladung aktualisiert.`;
-    }
-    if (collectionName === "plans") {
-        if (!beforeItem) return `${actor} hat einen neuen Kalenderplan erstellt.`;
-        return `${actor} hat einen Kalenderplan aktualisiert.`;
-    }
-    if (collectionName === "diaryEntries") {
-        if (!beforeItem) return `${actor} hat einen Tagebucheintrag hinzugefügt.`;
-        if (!sameValue(beforeItem.contributions?.[actor], afterItem.contributions?.[actor])) {
-            return `${actor} hat einen Tagebucheintrag bewertet.`;
-        }
-        return `${actor} hat einen Tagebucheintrag aktualisiert.`;
-    }
-    if (collectionName === "wishlistItems") {
-        if (!beforeItem) return `${actor} hat eine neue Idee hinzugefügt.`;
-        if (!sameValue(beforeItem.responses?.[actor] ?? beforeItem.reactions?.[actor], afterItem.responses?.[actor] ?? afterItem.reactions?.[actor])) {
-            return `${actor} hat auf eine Idee geantwortet.`;
-        }
-        if (!sameValue(beforeItem.comments, afterItem.comments)) return `${actor} hat eine Idee kommentiert.`;
-        return `${actor} hat eine Idee aktualisiert.`;
-    }
-    if (collectionName === "moods") return `${actor} hat einen Stimmungseintrag aktualisiert.`;
-    return "";
-}
-
-function appendChangeNotifications(before, after) {
-    const actor = before.currentIdentity;
-    if (!IDENTITIES.includes(actor) || !isRecord(after)) return;
-    const recipient = actor === "Yaoyu" ? "Daria" : "Yaoyu";
-    const routes = {
-        invitations: "ideas",
-        plans: "home",
-        diaryEntries: "diary",
-        wishlistItems: "ideas",
-        moods: "home"
-    };
-    const additions = [];
-
-    Object.keys(routes).forEach((collectionName) => {
-        const oldItems = itemMap(before[collectionName]);
-        const newItems = itemMap(after[collectionName]);
-        for (const [id, afterItem] of newItems) {
-            const beforeItem = oldItems.get(id) || null;
-            if (beforeItem && sameValue(beforeItem, afterItem)) continue;
-            const message = notificationMessage(collectionName, beforeItem, afterItem, actor);
-            if (!message) continue;
-            additions.push({
-                id: generateId(),
-                recipient,
-                actor,
-                route: routes[collectionName],
-                sourceCollection: collectionName,
-                sourceId: String(id),
-                message,
-                createdAt: new Date().toISOString(),
-                read: false
-            });
-        }
-    });
-
-    if (!additions.length) return;
-    if (!Array.isArray(after.notifications)) after.notifications = [];
-    after.notifications.push(...additions);
-}
-
-function pruneNotifications(data, now = new Date()) {
-    if (!Array.isArray(data?.notifications)) return;
-    const cutoff = now.getTime() - (7 * 24 * 60 * 60 * 1000);
-    const valid = data.notifications.filter((item) => {
-        if (!item || !IDENTITIES.includes(item.recipient)) return false;
-        const created = new Date(item.createdAt).getTime();
-        return Number.isFinite(created) && created >= cutoff;
-    });
-    const keptIds = new Set();
-    IDENTITIES.forEach((recipient) => {
-        valid.filter((item) => item.recipient === recipient)
-            .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
-            .slice(0, 20)
-            .forEach((item) => keptIds.add(item.id));
-    });
-    data.notifications = valid.filter((item) => keptIds.has(item.id));
-}
-
-export function cleanupNotifications() {
-    return updateData((data) => {
-        pruneNotifications(data);
-        return data;
-    });
-}
-
-export async function replaceSharedData(value) {
-    const current = loadData();
-    const clean = normalizeData({ ...value, version: 1, currentIdentity: current.currentIdentity });
-    if (!replaceAllHandler) throw new Error("CLOUD_NOT_READY");
-    await replaceAllHandler(clean);
-    saveLocalData(clean);
-    return clean;
-}
-
-export function getCurrentIdentity() {
-    return loadData().currentIdentity;
-}
-
-export function setCurrentIdentity(identity) {
-    if (!IDENTITIES.includes(identity)) return false;
-    const data = loadData();
-    data.currentIdentity = identity;
-    return saveLocalData(data);
-}
-
-export function clearCurrentIdentity() {
-    const data = loadData();
-    data.currentIdentity = null;
-    return saveLocalData(data);
-}
-
-export function getOppositeIdentity(identity = getCurrentIdentity()) {
-    return identity === "Yaoyu" ? "Daria" : "Yaoyu";
 }
 
 export function generateId() {
@@ -233,23 +100,7 @@ export function generateId() {
     return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-export async function resetAllData() {
-    const identity = getCurrentIdentity();
-    const clean = emptyData(identity);
-    if (!replaceAllHandler) throw new Error("CLOUD_NOT_READY");
-    await replaceAllHandler(clean);
-    saveLocalData(clean);
-}
-
-export function clearLocalCache() {
-    localStorage.removeItem(STORAGE_KEY);
-}
-
-export function isIdentity(value) {
-    return IDENTITIES.includes(value);
-}
-
-export function safeText(value, maxLength = 300, fallback = "") {
+export function safeText(value, maxLength = 5000, fallback = "") {
     if (typeof value !== "string") return fallback;
     return value.trim().slice(0, maxLength);
 }
@@ -263,25 +114,42 @@ export function isIsoDate(value) {
 
 export function localToday() {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return isoFromDate(now);
 }
 
-export function formatDate(value, options = {}) {
-    if (!isIsoDate(value)) return "Keine Auswahl";
+export function isoFromDate(date) {
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0")
+    ].join("-");
+}
+
+export function dateFromIso(value) {
+    if (!isIsoDate(value)) return new Date(NaN);
     const [year, month, day] = value.split("-").map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString("de-DE", {
-        day: "numeric",
-        month: "long",
+    return new Date(year, month - 1, day);
+}
+
+export function formatChineseDate(value, options = {}) {
+    const date = dateFromIso(value);
+    if (Number.isNaN(date.getTime())) return "日期无效";
+    return date.toLocaleDateString("zh-CN", {
         year: "numeric",
+        month: "long",
+        day: "numeric",
         ...options
     });
 }
 
-export function clone(value) {
-    return JSON.parse(JSON.stringify(value));
+export function escapeHtml(value = "") {
+    return String(value).replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+    })[character]);
 }
 
-export { STORAGE_KEY, IDENTITIES, SHARED_COLLECTIONS };
+export { STORAGE_KEY, COLLECTIONS, KINDS };
