@@ -19,17 +19,9 @@ const CATEGORY_META = {
     guest: { label: "客房", color: "yellow" }
 };
 
-const EVENT_EMOJI_GROUPS = [
-    { label: "学习", items: ["📚", "📝", "💻", "🎓", "📖", "🧠"] },
-    { label: "生活", items: ["🛒", "🏠", "🧹", "🍳", "💳", "📦"] },
-    { label: "活动", items: ["🏆", "🎉", "🎭", "🎵", "⚽", "🤝"] },
-    { label: "出行", items: ["🚄", "✈️", "🚗", "🚌", "🚲", "🧳"] },
-    { label: "办事", items: ["📄", "🏦", "🪪", "🏥", "📞", "❗"] }
-];
-
-const JOURNAL_EMOJIS = [
-    "😊", "😄", "🥳", "😌", "😎", "🤔", "😐", "😴", "😔", "😢",
-    "😤", "😡", "😰", "🤒", "💪", "🙏", "❤️", "🌟", "☀️", "🌧️"
+const CALENDAR_EMOJIS = [
+    "😊", "😄", "😐", "😔", "😢", "❤️", "😴", "🥰", "😡", "🤧",
+    "🎬", "🌟", "🍻", "🎉", "🏠", "💻", "📚", "🚌", "🚄", "✈️"
 ];
 
 let visibleMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -164,15 +156,15 @@ function emojiRadio(name, emoji, selected, label = "") {
 }
 
 function eventEmojiPicker(selected) {
-    const available = EVENT_EMOJI_GROUPS.flatMap((group) => group.items);
-    const current = available.includes(selected) ? selected : "📚";
-    return `<div class="emoji-grid event-emoji-grid">${EVENT_EMOJI_GROUPS.map((group) =>
-        group.items.map((emoji) => emojiRadio("emoji", emoji, current, `${group.label} ${emoji}`)).join("")
+    const current = CALENDAR_EMOJIS.includes(selected) ? selected : "📚";
+    return `<div class="emoji-grid event-emoji-grid">${CALENDAR_EMOJIS.map((emoji) =>
+        emojiRadio("emoji", emoji, current)
     ).join("")}</div>`;
 }
 
 function journalEmojiPicker(selected) {
-    return `<div class="emoji-grid journal-emoji-grid">${JOURNAL_EMOJIS.map((emoji) => emojiRadio("journalEmoji", emoji, selected)).join("")}</div>`;
+    const current = CALENDAR_EMOJIS.includes(selected) ? selected : "😊";
+    return `<div class="emoji-grid journal-emoji-grid">${CALENDAR_EMOJIS.map((emoji) => emojiRadio("journalEmoji", emoji, current)).join("")}</div>`;
 }
 
 function selectedDayMarkup(events) {
@@ -196,7 +188,8 @@ function selectedDayMarkup(events) {
             </article>`;
     }).join("") : '<p class="empty-copy">这一天还没有日历事项。</p>';
     const journal = journalFor(selectedDate);
-    const journalEmoji = safeText(journal?.emoji, 8, "😊") || "😊";
+    const storedJournalEmoji = safeText(journal?.emoji, 8, "😊") || "😊";
+    const journalEmoji = CALENDAR_EMOJIS.includes(storedJournalEmoji) ? storedJournalEmoji : "😊";
     return `
         <section class="selected-day-panel">
             <div class="selected-day-heading">
@@ -433,7 +426,7 @@ export function renderHome(container, context) {
             return data;
         });
         planEditing = false;
-        context.toast("八行计划已保存。");
+        context.toast("已保存");
         rerender();
     });
 
