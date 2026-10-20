@@ -92,12 +92,23 @@ export function startRealtimeSync(onCollectionChanged) {
 // 识别的数据类型，因此不会在以后误删新日程、计划、日记或愿望。
 export async function purgeLegacyCloudData() {
     if (!db || !auth?.currentUser) throw new Error("NOT_AUTHENTICATED");
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - 30);
+    const dailyPlanCutoff = [
+        cutoff.getFullYear(),
+        String(cutoff.getMonth() + 1).padStart(2, "0"),
+        String(cutoff.getDate()).padStart(2, "0")
+    ].join("-");
     const names = [...COLLECTIONS, ...LEGACY_COLLECTIONS];
     for (const name of names) {
         const snapshot = await getDocs(cloudCollection(name));
         const obsolete = snapshot.docs.filter((item) => {
             if (LEGACY_COLLECTIONS.includes(name)) return true;
-            return !ACCEPTED_KINDS[name]?.has(item.data()?.kind);
+            const data = item.data();
+            if (!ACCEPTED_KINDS[name]?.has(data?.kind)) return true;
+            return name === "plans" && data.kind === "daily-plan-v1"
+                && (typeof data.date !== "string" || data.date < dailyPlanCutoff);
         });
         for (let index = 0; index < obsolete.length; index += 50) {
             await Promise.all(obsolete.slice(index, index + 50).map((item) => deleteDoc(item.ref)));

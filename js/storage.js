@@ -30,11 +30,17 @@ function isRecord(value) {
 
 function cleanCollection(name, value) {
     if (!Array.isArray(value)) return [];
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - 30);
+    const dailyPlanCutoff = isoFromDate(cutoff);
     return value.filter((item) => isRecord(item)
         && typeof item.id === "string"
         && item.id.length > 0
         && item.id.length <= 1000
-        && ALLOWED_KINDS[name]?.has(item.kind));
+        && ALLOWED_KINDS[name]?.has(item.kind)
+        && !(name === "plans" && item.kind === KINDS.daily
+            && (!isIsoDate(item.date) || item.date < dailyPlanCutoff)));
 }
 
 export function normalizeData(value) {

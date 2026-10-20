@@ -83,6 +83,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .today-plan-card::before { content: "☀"; position: absolute; right: 76px; top: 17px; color: rgba(239, 170, 84, 0.42); font-size: 18px; }
 .today-plan-heading { display: flex; justify-content: space-between; align-items: center; padding-bottom: 11px; }
 .today-plan-heading h2 { margin: 4px 0 0; font-size: 25px; }
+.plan-heading-actions { display: flex; align-items: center; gap: 8px; }
+.plan-clear-button { min-height: 33px; padding: 0 10px; border: 1px solid #ddd9e9; border-radius: 10px; color: #7a7186; background: rgba(255,255,255,0.82); font-size: 12px; font-weight: 700; cursor: pointer; }
+.plan-clear-button:hover { color: var(--danger); border-color: #edc6c6; background: #fff8f7; }
 .round-add { display: grid; place-items: center; width: 37px; height: 37px; border: 0; border-radius: 50%; color: white; background: linear-gradient(145deg, #44516a, #27344d); font-size: 21px; cursor: pointer; }
 .round-add.save-mode { width: 68px; border-radius: 13px; background: var(--blue); font-size: 13px; font-weight: 800; }
 .plan-date-group { display: grid; gap: 5px; }
@@ -90,13 +93,20 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .plan-date-picker input { min-width: 142px; border: 0; outline: 0; color: var(--ink); background: transparent; font-weight: 700; cursor: pointer; }
 .plan-date-picker:has(input:disabled) { opacity: 0.62; cursor: default; }
 .today-plan-lines { max-height: 258px; overflow-y: auto; border-top: 1px solid var(--line); }
-.today-plan-row { display: grid; grid-template-columns: minmax(72px, 0.27fr) 1fr; align-items: center; min-height: 32px; border-bottom: 1px solid var(--line); }
+.today-plan-row { display: grid; grid-template-columns: minmax(72px, 0.27fr) minmax(0, 1fr) 32px; align-items: center; gap: 7px; min-height: 32px; border-bottom: 1px solid var(--line); }
 .today-plan-row strong { color: #4d6388; font-size: 12px; }
 .today-plan-row span { font-size: 14px; }
+.today-plan-row.completed > strong, .today-plan-row.completed > span { color: #9aa2af; text-decoration: line-through; }
 .today-plan-row.empty span:first-child::after { content: ""; }
 .today-plan-row.editing { gap: 7px; padding: 2px 0; }
-.today-plan-row.editing input { width: 100%; min-width: 0; height: 28px; padding: 4px 7px; border: 1px solid #d8deea; border-radius: 7px; background: #fff; font-size: 12px; }
-.today-plan-row.editing input:first-child { color: #4d6388; }
+.today-plan-row.editing > input { width: 100%; min-width: 0; height: 28px; padding: 4px 7px; border: 1px solid #d8deea; border-radius: 7px; background: #fff; font-size: 12px; }
+.today-plan-row.editing > input:first-child { color: #4d6388; }
+.plan-complete-control { display: grid; place-items: center; cursor: pointer; }
+.plan-complete-control input { position: absolute; opacity: 0; pointer-events: none; }
+.plan-complete-control span { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid #d6dbe5; border-radius: 8px; color: transparent; background: rgba(255,255,255,0.8); font-size: 13px; font-weight: 900; transition: 130ms ease; }
+.plan-complete-control input:checked + span { color: white; border-color: var(--green); background: var(--green); box-shadow: 0 5px 12px rgba(34,160,107,0.2); }
+.plan-complete-control input:focus-visible + span { outline: 3px solid rgba(59,130,246,0.22); }
+.plan-complete-control:has(input:disabled) { cursor: default; opacity: 0.3; }
 
 .calendar-section { position: relative; padding: clamp(16px, 2.3vw, 23px); overflow: hidden; border-radius: var(--radius); background: linear-gradient(155deg, rgba(255,255,255,0.96), rgba(245,251,248,0.88)); }
 .calendar-section::before { content: "✧"; position: absolute; right: 24px; top: 70px; color: rgba(72, 167, 133, 0.27); font-size: 28px; pointer-events: none; }
@@ -193,8 +203,17 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .wish-list { display: grid; gap: 14px; }
 .wish-card { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 22px; border-radius: 20px; }
 .wish-emoji { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 18px; background: #f3f5f9; font-size: 30px; }
-.wish-content h3 { margin: 4px 0 8px; }
+.wish-title-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 4px 0 8px; }
+.wish-content h3 { margin: 0; }
 .wish-content p { margin: 0; line-height: 1.7; }
+.wish-age { display: inline-flex; align-items: center; min-height: 25px; padding: 0 9px; border-radius: 999px; color: #76658f; background: #f3edff; font-size: 11px; font-weight: 700; }
+.wish-actions { align-self: center; flex-wrap: nowrap; }
+.small-action { min-height: 36px; padding: 0 13px; font-size: 12px; }
+.success-button { border-color: #218d65; background: #218d65; }
+.success-button:hover { border-color: #187451; background: #187451; }
+.confirm-dialog { width: min(470px, calc(100% - 30px)); }
+.compact-dialog-form { gap: 20px; }
+.confirm-copy { margin: 0; color: #596579; line-height: 1.7; }
 
 .app-dialog { width: min(560px, calc(100% - 30px)); max-height: calc(100vh - 30px); padding: 0; overflow: auto; border: 0; border-radius: 22px; box-shadow: 0 30px 90px rgba(54, 45, 67, 0.24); }
 .app-dialog::backdrop { background: rgba(24, 32, 48, 0.42); backdrop-filter: blur(5px); }

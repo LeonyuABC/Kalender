@@ -81,10 +81,12 @@ function renderTodayPanel() {
             return `<div class="today-plan-row editing">
                 <input name="planTime-${index}" maxlength="50" value="${escapeHtml(item?.timeLabel || "")}" placeholder="时间">
                 <input name="planText-${index}" maxlength="1000" value="${escapeHtml(item?.text || "")}" placeholder="填写事情">
+                <label class="plan-complete-control" title="已完成"><input name="planDone-${index}" type="checkbox" ${item?.completed ? "checked" : ""}><span>✓</span></label>
             </div>`;
         }
-        return `<div class="today-plan-row${item ? "" : " empty"}">
+        return `<div class="today-plan-row${item ? "" : " empty"}${item?.completed ? " completed" : ""}">
             <strong>${escapeHtml(item?.timeLabel || "")}</strong><span>${escapeHtml(item?.text || "")}</span>
+            <label class="plan-complete-control" title="${item?.completed ? "取消完成" : "标记完成"}"><input type="checkbox" ${item?.completed ? "checked" : ""} ${item ? `data-plan-complete="${escapeHtml(item.id)}"` : "disabled"}><span>✓</span></label>
         </div>`;
     }).join("");
     const timeCells = info.times.map((item) => `
@@ -109,7 +111,10 @@ function renderTodayPanel() {
                             <span>📅</span><input id="plan-board-date" type="date" value="${planBoardDate}" ${planEditing ? "disabled" : ""}>
                         </label>
                     </div>
-                    <button id="toggle-plan-edit" class="round-add${planEditing ? " save-mode" : ""}" type="button" aria-label="${planEditing ? "保存八行计划" : "编辑八行计划"}">${planEditing ? "保存" : "＋"}</button>
+                    <div class="plan-heading-actions">
+                        <button id="clear-daily-plans" class="plan-clear-button" type="button" ${planEditing ? "disabled" : ""}>清空</button>
+                        <button id="toggle-plan-edit" class="round-add${planEditing ? " save-mode" : ""}" type="button" aria-label="${planEditing ? "保存八行计划" : "编辑八行计划"}">${planEditing ? "保存" : "＋"}</button>
+                    </div>
                 </header>
                 <div id="plan-board-rows" class="today-plan-lines${planEditing ? " editing" : ""}">${rows}</div>
             </article>
@@ -403,7 +408,8 @@ export function renderHome(container, context) {
         }
         const rows = Array.from({ length: 8 }, (_, index) => ({
             timeLabel: safeText(container.querySelector(`[name="planTime-${index}"]`)?.value, 50),
-            text: safeText(container.querySelector(`[name="planText-${index}"]`)?.value, 1000)
+            text: safeText(container.querySelector(`[name="planText-${index}"]`)?.value, 1000),
+            completed: Boolean(container.querySelector(`[name="planDone-${index}"]`)?.checked)
         }));
         updateData((data) => {
             const previous = data.plans
@@ -418,6 +424,7 @@ export function renderHome(container, context) {
                     date: planBoardDate,
                     timeLabel: row.timeLabel,
                     text: row.text,
+                    completed: row.completed,
                     order: index + 1,
                     createdAt: previous[index]?.createdAt || new Date().toISOString(),
                     updatedAt: new Date().toISOString()
@@ -429,6 +436,27 @@ export function renderHome(container, context) {
         context.toast("已保存");
         rerender();
     });
+
+    container.querySelector("#clear-daily-plans").addEventListener("click", () => {
+        updateData((data) => {
+            data.plans = data.plans.filter((item) => item.kind !== KINDS.daily || item.date !== planBoardDate);
+            return data;
+        });
+        context.toast("已清空");
+        rerender();
+    });
+
+    container.querySelectorAll("[data-plan-complete]").forEach((checkbox) => checkbox.addEventListener("change", () => {
+        updateData((data) => {
+            const item = data.plans.find((entry) => entry.kind === KINDS.daily && entry.id === checkbox.dataset.planComplete);
+            if (item) {
+                item.completed = checkbox.checked;
+                item.updatedAt = new Date().toISOString();
+            }
+            return data;
+        });
+        rerender();
+    }));
 
     container.querySelector("#previous-month").addEventListener("click", () => {
         visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1);
