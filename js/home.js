@@ -1,4 +1,5 @@
 import { almanacForDate } from "./almanac.js";
+import { CALENDAR_EMOJIS } from "./constants.js";
 import {
     KINDS,
     dateFromIso,
@@ -18,11 +19,6 @@ const CATEGORY_META = {
     activity: { label: "活动", color: "green" },
     guest: { label: "客房", color: "yellow" }
 };
-
-const CALENDAR_EMOJIS = [
-    "😊", "😄", "😐", "😔", "😢", "❤️", "😴", "🥰", "😡", "🤧",
-    "🎬", "🌟", "🍻", "🎉", "🏠", "💻", "📚", "🚌", "🚄", "✈️"
-];
 
 let visibleMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedDate = localToday();
@@ -72,10 +68,94 @@ function dailyPlansFor(date) {
         .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
 }
 
+function mealPlansFor(date) {
+    return loadData().mealPlans
+        .filter((item) => item.kind === KINDS.meal && item.date === date && Number.isInteger(Number(item.slot)))
+        .sort((a, b) => Number(a.slot) - Number(b.slot));
+}
+
+function recipeItems() {
+    return loadData().recipes.filter((item) => item.kind === KINDS.recipe && safeText(item.title, 200));
+}
+
+function renderMealSlots() {
+    const meals = mealPlansFor(planBoardDate);
+    const disabled = planEditing ? "disabled" : "";
+    return Array.from({ length: 4 }, (_, slot) => {
+        const meal = meals.find((item) => Number(item.slot) === slot);
+        if (!meal) {
+            return `<button class="meal-slot empty" type="button" data-meal-slot="${slot}" aria-label="添加菜品" ${disabled}><span>＋</span></button>`;
+        }
+        return `<div class="meal-slot filled">
+            <button type="button" data-meal-slot="${slot}" title="更换菜品" ${disabled}>${escapeHtml(meal.title || "已选菜品")}</button>
+            <button class="meal-remove" type="button" data-remove-meal="${escapeHtml(meal.id)}" aria-label="移除${escapeHtml(meal.title || "菜品")}" ${disabled}>×</button>
+        </div>`;
+    }).join("");
+}
+
+function mealPlanFormMarkup(slot) {
+    const recipes = recipeItems();
+    const current = mealPlansFor(planBoardDate).find((item) => Number(item.slot) === Number(slot));
+    const choices = recipes.length ? recipes.map((recipe, index) => `
+        <label class="recipe-choice">
+            <input type="radio" name="recipeId" value="${escapeHtml(recipe.id)}" ${(current?.recipeId === recipe.id || (!current && index === 0)) ? "checked" : ""} required>
+            <span>${escapeHtml(recipe.title)}</span>
+        </label>`).join("") : '<p class="empty-copy compact-empty">菜谱还是空的，请先到“我的菜谱”添加菜品。</p>';
+    return `
+        <form id="meal-plan-form" class="dialog-form">
+            <div class="dialog-heading"><div><p class="eyebrow">今日菜品</p><h2>选择一道菜</h2></div><button type="button" class="dialog-x" data-close-meal aria-label="关闭">×</button></div>
+            <label class="field"><span>日期</span><input name="date" type="date" value="${planBoardDate}" required></label>
+            <div class="field"><span>菜谱</span><div class="recipe-choice-list">${choices}</div></div>
+            <p class="form-error" aria-live="polite"></p>
+            <div class="action-row"><button class="primary-button" type="submit" ${recipes.length ? "" : "disabled"}>确定</button><button class="secondary-button" type="button" data-close-meal>取消</button></div>
+        </form>`;
+}
+
+function bindMealPlanDialog(container, context, rerender, slot) {
+    const dialog = container.querySelector("#meal-plan-dialog");
+    dialog.innerHTML = mealPlanFormMarkup(slot);
+    dialog.querySelectorAll("[data-close-meal]").forEach((button) => button.addEventListener("click", () => dialog.close()));
+    dialog.querySelector("#meal-plan-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        if (!form.reportValidity()) return;
+        const fields = new FormData(form);
+        const date = safeText(fields.get("date"), 10);
+        const recipe = recipeItems().find((item) => item.id === fields.get("recipeId"));
+        if (!isIsoDate(date) || !recipe) {
+            form.querySelector(".form-error").textContent = "请选择日期和菜品。";
+            return;
+        }
+        const now = new Date().toISOString();
+        updateData((data) => {
+            const existing = data.mealPlans.find((item) => item.kind === KINDS.meal && item.date === date && Number(item.slot) === Number(slot));
+            const next = {
+                kind: KINDS.meal,
+                id: existing?.id || generateId(),
+                recipeId: recipe.id,
+                title: safeText(recipe.title, 200),
+                date,
+                slot: Number(slot),
+                createdAt: existing?.createdAt || now,
+                updatedAt: now
+            };
+            const index = data.mealPlans.findIndex((item) => item.id === next.id);
+            if (index >= 0) data.mealPlans[index] = next;
+            else data.mealPlans.push(next);
+            return data;
+        });
+        planBoardDate = date;
+        dialog.close();
+        context.toast("菜品已安排");
+        rerender();
+    });
+    dialog.showModal();
+}
+
 function renderTodayPanel() {
     const info = almanacForDate(localToday());
     const plans = dailyPlansFor(planBoardDate).slice(0, 8);
-    const rows = Array.from({ length: 8 }, (_, index) => {
+    const rows = Array.from({ length: 6 }, (_, index) => {
         const item = plans[index];
         if (planEditing) {
             return `<div class="today-plan-row editing">
@@ -113,10 +193,11 @@ function renderTodayPanel() {
                     </div>
                     <div class="plan-heading-actions">
                         <button id="clear-daily-plans" class="plan-clear-button" type="button" ${planEditing ? "disabled" : ""}>清空</button>
-                        <button id="toggle-plan-edit" class="round-add${planEditing ? " save-mode" : ""}" type="button" aria-label="${planEditing ? "保存八行计划" : "编辑八行计划"}">${planEditing ? "保存" : "＋"}</button>
+                        <button id="toggle-plan-edit" class="round-add${planEditing ? " save-mode" : ""}" type="button" aria-label="${planEditing ? "保存今日安排" : "编辑今日安排"}">${planEditing ? "保存" : "＋"}</button>
                     </div>
                 </header>
                 <div id="plan-board-rows" class="today-plan-lines${planEditing ? " editing" : ""}">${rows}</div>
+                <div class="meal-slot-grid" aria-label="当日菜品">${renderMealSlots()}</div>
             </article>
         </section>`;
 }
@@ -384,6 +465,7 @@ export function renderHome(container, context) {
             <div id="selected-day-host">${selectedDayMarkup(events)}</div>
         </section>
         <dialog id="event-dialog" class="app-dialog"></dialog>
+        <dialog id="meal-plan-dialog" class="app-dialog"></dialog>
         <dialog id="export-dialog" class="app-dialog">
             <form id="export-form" class="dialog-form">
                 <div class="dialog-heading"><div><p class="eyebrow">Word导出</p><h2>导出日记</h2></div><button type="button" class="dialog-x" data-close-export aria-label="关闭">×</button></div>
@@ -406,7 +488,7 @@ export function renderHome(container, context) {
             container.querySelector('[name="planTime-0"]')?.focus();
             return;
         }
-        const rows = Array.from({ length: 8 }, (_, index) => ({
+        const rows = Array.from({ length: 6 }, (_, index) => ({
             timeLabel: safeText(container.querySelector(`[name="planTime-${index}"]`)?.value, 50),
             text: safeText(container.querySelector(`[name="planText-${index}"]`)?.value, 1000),
             completed: Boolean(container.querySelector(`[name="planDone-${index}"]`)?.checked)
@@ -455,6 +537,19 @@ export function renderHome(container, context) {
             }
             return data;
         });
+        rerender();
+    }));
+
+    container.querySelectorAll("[data-meal-slot]").forEach((button) => button.addEventListener("click", () => {
+        bindMealPlanDialog(container, context, rerender, Number(button.dataset.mealSlot));
+    }));
+    container.querySelectorAll("[data-remove-meal]").forEach((button) => button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        updateData((data) => {
+            data.mealPlans = data.mealPlans.filter((item) => item.id !== button.dataset.removeMeal);
+            return data;
+        });
+        context.toast("菜品已移除");
         rerender();
     }));
 

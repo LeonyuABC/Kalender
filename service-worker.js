@@ -1,16 +1,18 @@
-const CACHE_NAME = "personal-calendar-2026-10-20-v5";
+const CACHE_NAME = "personal-calendar-2026-10-20-v6";
 const APP_SHELL = [
     "./",
     "./index.html",
-    "./style.css?v=20261020-personal-v84",
+    "./style.css?v=20261020-personal-v85",
     "./manifest.webmanifest",
     "./config.js",
-    "./js/app.js?v=20261020-personal-v84",
+    "./js/app.js?v=20261020-personal-v85",
     "./js/storage.js",
     "./js/cloud.js",
     "./js/almanac.js",
+    "./js/constants.js",
     "./js/home.js",
     "./js/wishlist.js",
+    "./js/recipes.js",
     "./js/vendor/lunar.js",
     "./js/vendor/docx.iife.js",
     "./icons/icon.svg",

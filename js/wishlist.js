@@ -1,9 +1,5 @@
 import { KINDS, escapeHtml, generateId, isIsoDate, loadData, localToday, safeText, updateData } from "./storage.js";
-
-const PLAN_EMOJIS = [
-    "😊", "😄", "😐", "😔", "😢", "❤️", "😴", "🥰", "😡", "🤧",
-    "🎬", "🌟", "🍻", "🎉", "🏠", "💻", "📚", "🚌", "🚄", "✈️"
-];
+import { CALENDAR_EMOJIS as PLAN_EMOJIS } from "./constants.js";
 
 let wishTimer = null;
 

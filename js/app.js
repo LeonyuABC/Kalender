@@ -2,11 +2,12 @@ import { applyCloudCollection, configureCloudStorage } from "./storage.js";
 import { initializeCloud, purgeLegacyCloudData, startRealtimeSync, syncDataDiff } from "./cloud.js";
 import { renderHome } from "./home.js";
 import { renderWishlist } from "./wishlist.js";
+import { renderRecipes } from "./recipes.js";
 
 const main = document.querySelector("#main-content");
 const toastElement = document.querySelector("#toast");
 const syncStatus = document.querySelector("#sync-status");
-const validRoutes = new Set(["home", "wishlist"]);
+const validRoutes = new Set(["home", "wishlist", "recipes"]);
 let toastTimer = null;
 let cloudRenderTimer = null;
 
@@ -43,9 +44,11 @@ function renderRoute(route = currentRoute()) {
     setActiveNavigation(route);
     if (route === "home") renderHome(main, context);
     if (route === "wishlist") renderWishlist(main, context);
+    if (route === "recipes") renderRecipes(main, context);
     const titles = {
         home: "个人日程",
-        wishlist: "愿望清单 · 个人日程"
+        wishlist: "愿望清单 · 个人日程",
+        recipes: "我的菜谱 · 个人日程"
     };
     document.title = titles[route] || titles.home;
     main.focus({ preventScroll: true });

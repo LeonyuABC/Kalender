@@ -1,16 +1,20 @@
 const STORAGE_KEY = "personalWorkspaceCacheV1";
-const COLLECTIONS = ["plans", "diaryEntries", "wishlistItems"];
+const COLLECTIONS = ["plans", "diaryEntries", "wishlistItems", "recipes", "mealPlans"];
 const KINDS = {
     calendar: "calendar-event-v1",
     daily: "daily-plan-v1",
     journal: "journal-entry-v1",
-    wish: "wish-item-v1"
+    wish: "wish-item-v1",
+    recipe: "recipe-item-v1",
+    meal: "meal-plan-v1"
 };
 
 const ALLOWED_KINDS = {
     plans: new Set([KINDS.calendar, KINDS.daily]),
     diaryEntries: new Set([KINDS.journal]),
-    wishlistItems: new Set([KINDS.wish])
+    wishlistItems: new Set([KINDS.wish]),
+    recipes: new Set([KINDS.recipe]),
+    mealPlans: new Set([KINDS.meal])
 };
 
 let syncDiffHandler = null;
@@ -20,7 +24,9 @@ function emptyData() {
         version: 1,
         plans: [],
         diaryEntries: [],
-        wishlistItems: []
+        wishlistItems: [],
+        recipes: [],
+        mealPlans: []
     };
 }
 
@@ -39,7 +45,8 @@ function cleanCollection(name, value) {
         && item.id.length > 0
         && item.id.length <= 1000
         && ALLOWED_KINDS[name]?.has(item.kind)
-        && !(name === "plans" && item.kind === KINDS.daily
+        && !(((name === "plans" && item.kind === KINDS.daily)
+            || (name === "mealPlans" && item.kind === KINDS.meal))
             && (!isIsoDate(item.date) || item.date < dailyPlanCutoff)));
 }
 
