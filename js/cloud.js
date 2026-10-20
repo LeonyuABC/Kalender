@@ -23,9 +23,7 @@ const LEGACY_COLLECTIONS = ["invitations", "moods", "notifications"];
 const ACCEPTED_KINDS = {
     plans: new Set(["calendar-event-v1", "daily-plan-v1"]),
     diaryEntries: new Set(["journal-entry-v1"]),
-    wishlistItems: new Set(["wish-item-v1"]),
-    recipes: new Set(["recipe-item-v1"]),
-    mealPlans: new Set(["meal-plan-v1"])
+    wishlistItems: new Set(["wish-item-v1"])
 };
 
 let app = null;
@@ -109,8 +107,7 @@ export async function purgeLegacyCloudData() {
             if (LEGACY_COLLECTIONS.includes(name)) return true;
             const data = item.data();
             if (!ACCEPTED_KINDS[name]?.has(data?.kind)) return true;
-            return ((name === "plans" && data.kind === "daily-plan-v1")
-                || (name === "mealPlans" && data.kind === "meal-plan-v1"))
+            return (name === "plans" && data.kind === "daily-plan-v1")
                 && (typeof data.date !== "string" || data.date < dailyPlanCutoff);
         });
         for (let index = 0; index < obsolete.length; index += 50) {

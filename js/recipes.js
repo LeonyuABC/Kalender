@@ -1,8 +1,8 @@
-import { KINDS, escapeHtml, generateId, loadData, safeText, updateData } from "./storage.js";
+import { KINDS, RECORD_TYPES, escapeHtml, generateId, loadData, safeText, updateData } from "./storage.js";
 
 function recipes() {
-    return loadData().recipes
-        .filter((item) => item.kind === KINDS.recipe)
+    return loadData().wishlistItems
+        .filter((item) => item.kind === KINDS.wish && item.recordType === RECORD_TYPES.recipe)
         .sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
 }
 
@@ -95,7 +95,8 @@ function openForm(container, context, rerender, item = null) {
             if (file) photoData = await compressRecipePhoto(file);
             const now = new Date().toISOString();
             const next = {
-                kind: KINDS.recipe,
+                kind: KINDS.wish,
+                recordType: RECORD_TYPES.recipe,
                 id: item?.id || generateId(),
                 title,
                 details,
@@ -104,9 +105,9 @@ function openForm(container, context, rerender, item = null) {
                 updatedAt: now
             };
             updateData((data) => {
-                const index = data.recipes.findIndex((entry) => entry.id === next.id);
-                if (index >= 0) data.recipes[index] = next;
-                else data.recipes.push(next);
+                const index = data.wishlistItems.findIndex((entry) => entry.id === next.id);
+                if (index >= 0) data.wishlistItems[index] = next;
+                else data.wishlistItems.push(next);
                 return data;
             });
             dialog.close();
@@ -171,8 +172,8 @@ export function renderRecipes(container, context) {
     container.querySelectorAll("[data-delete-recipe]").forEach((button) => button.addEventListener("click", () => {
         if (!window.confirm("确定删除这道菜谱吗？已经安排的对应菜品也会移除。")) return;
         updateData((data) => {
-            data.recipes = data.recipes.filter((entry) => entry.id !== button.dataset.deleteRecipe);
-            data.mealPlans = data.mealPlans.filter((entry) => entry.recipeId !== button.dataset.deleteRecipe);
+            data.wishlistItems = data.wishlistItems.filter((entry) => entry.id !== button.dataset.deleteRecipe);
+            data.plans = data.plans.filter((entry) => entry.recordType !== RECORD_TYPES.meal || entry.recipeId !== button.dataset.deleteRecipe);
             return data;
         });
         context.toast("菜谱已删除");

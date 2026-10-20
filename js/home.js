@@ -2,6 +2,7 @@ import { almanacForDate } from "./almanac.js";
 import { CALENDAR_EMOJIS } from "./constants.js";
 import {
     KINDS,
+    RECORD_TYPES,
     dateFromIso,
     escapeHtml,
     formatChineseDate,
@@ -64,18 +65,18 @@ function eventOccursOn(event, date) {
 
 function dailyPlansFor(date) {
     return loadData().plans
-        .filter((item) => item.kind === KINDS.daily && item.date === date)
+        .filter((item) => item.kind === KINDS.daily && item.recordType !== RECORD_TYPES.meal && item.date === date)
         .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
 }
 
 function mealPlansFor(date) {
-    return loadData().mealPlans
-        .filter((item) => item.kind === KINDS.meal && item.date === date && Number.isInteger(Number(item.slot)))
+    return loadData().plans
+        .filter((item) => item.kind === KINDS.daily && item.recordType === RECORD_TYPES.meal && item.date === date && Number.isInteger(Number(item.slot)))
         .sort((a, b) => Number(a.slot) - Number(b.slot));
 }
 
 function recipeItems() {
-    return loadData().recipes.filter((item) => item.kind === KINDS.recipe && safeText(item.title, 200));
+    return loadData().wishlistItems.filter((item) => item.kind === KINDS.wish && item.recordType === RECORD_TYPES.recipe && safeText(item.title, 200));
 }
 
 function renderMealSlots() {
@@ -128,9 +129,10 @@ function bindMealPlanDialog(container, context, rerender, slot) {
         }
         const now = new Date().toISOString();
         updateData((data) => {
-            const existing = data.mealPlans.find((item) => item.kind === KINDS.meal && item.date === date && Number(item.slot) === Number(slot));
+            const existing = data.plans.find((item) => item.kind === KINDS.daily && item.recordType === RECORD_TYPES.meal && item.date === date && Number(item.slot) === Number(slot));
             const next = {
-                kind: KINDS.meal,
+                kind: KINDS.daily,
+                recordType: RECORD_TYPES.meal,
                 id: existing?.id || generateId(),
                 recipeId: recipe.id,
                 title: safeText(recipe.title, 200),
@@ -139,9 +141,9 @@ function bindMealPlanDialog(container, context, rerender, slot) {
                 createdAt: existing?.createdAt || now,
                 updatedAt: now
             };
-            const index = data.mealPlans.findIndex((item) => item.id === next.id);
-            if (index >= 0) data.mealPlans[index] = next;
-            else data.mealPlans.push(next);
+            const index = data.plans.findIndex((item) => item.id === next.id);
+            if (index >= 0) data.plans[index] = next;
+            else data.plans.push(next);
             return data;
         });
         planBoardDate = date;
@@ -495,9 +497,9 @@ export function renderHome(container, context) {
         }));
         updateData((data) => {
             const previous = data.plans
-                .filter((item) => item.kind === KINDS.daily && item.date === planBoardDate)
+                .filter((item) => item.kind === KINDS.daily && item.recordType !== RECORD_TYPES.meal && item.date === planBoardDate)
                 .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
-            data.plans = data.plans.filter((item) => item.kind !== KINDS.daily || item.date !== planBoardDate);
+            data.plans = data.plans.filter((item) => item.kind !== KINDS.daily || item.recordType === RECORD_TYPES.meal || item.date !== planBoardDate);
             rows.forEach((row, index) => {
                 if (!row.timeLabel && !row.text) return;
                 data.plans.push({
@@ -521,7 +523,7 @@ export function renderHome(container, context) {
 
     container.querySelector("#clear-daily-plans").addEventListener("click", () => {
         updateData((data) => {
-            data.plans = data.plans.filter((item) => item.kind !== KINDS.daily || item.date !== planBoardDate);
+            data.plans = data.plans.filter((item) => item.kind !== KINDS.daily || item.recordType === RECORD_TYPES.meal || item.date !== planBoardDate);
             return data;
         });
         context.toast("已清空");
@@ -530,7 +532,7 @@ export function renderHome(container, context) {
 
     container.querySelectorAll("[data-plan-complete]").forEach((checkbox) => checkbox.addEventListener("change", () => {
         updateData((data) => {
-            const item = data.plans.find((entry) => entry.kind === KINDS.daily && entry.id === checkbox.dataset.planComplete);
+            const item = data.plans.find((entry) => entry.kind === KINDS.daily && entry.recordType !== RECORD_TYPES.meal && entry.id === checkbox.dataset.planComplete);
             if (item) {
                 item.completed = checkbox.checked;
                 item.updatedAt = new Date().toISOString();
@@ -546,7 +548,7 @@ export function renderHome(container, context) {
     container.querySelectorAll("[data-remove-meal]").forEach((button) => button.addEventListener("click", (event) => {
         event.stopPropagation();
         updateData((data) => {
-            data.mealPlans = data.mealPlans.filter((item) => item.id !== button.dataset.removeMeal);
+            data.plans = data.plans.filter((item) => item.id !== button.dataset.removeMeal);
             return data;
         });
         context.toast("菜品已移除");

@@ -1,11 +1,11 @@
-import { KINDS, escapeHtml, generateId, isIsoDate, loadData, localToday, safeText, updateData } from "./storage.js";
+import { KINDS, RECORD_TYPES, escapeHtml, generateId, isIsoDate, loadData, localToday, safeText, updateData } from "./storage.js";
 import { CALENDAR_EMOJIS as PLAN_EMOJIS } from "./constants.js";
 
 let wishTimer = null;
 
 function wishes() {
     return loadData().wishlistItems
-        .filter((item) => item.kind === KINDS.wish)
+        .filter((item) => item.kind === KINDS.wish && item.recordType !== RECORD_TYPES.recipe)
         .sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
 }
 

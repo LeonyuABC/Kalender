@@ -1,20 +1,22 @@
 const STORAGE_KEY = "personalWorkspaceCacheV1";
-const COLLECTIONS = ["plans", "diaryEntries", "wishlistItems", "recipes", "mealPlans"];
+// Keep the original three Firestore collections so existing security rules continue
+// to work. Recipes and meal selections are distinguished by recordType instead.
+const COLLECTIONS = ["plans", "diaryEntries", "wishlistItems"];
 const KINDS = {
     calendar: "calendar-event-v1",
     daily: "daily-plan-v1",
     journal: "journal-entry-v1",
-    wish: "wish-item-v1",
-    recipe: "recipe-item-v1",
+    wish: "wish-item-v1"
+};
+const RECORD_TYPES = {
+    recipe: "recipe-v1",
     meal: "meal-plan-v1"
 };
 
 const ALLOWED_KINDS = {
     plans: new Set([KINDS.calendar, KINDS.daily]),
     diaryEntries: new Set([KINDS.journal]),
-    wishlistItems: new Set([KINDS.wish]),
-    recipes: new Set([KINDS.recipe]),
-    mealPlans: new Set([KINDS.meal])
+    wishlistItems: new Set([KINDS.wish])
 };
 
 let syncDiffHandler = null;
@@ -24,9 +26,7 @@ function emptyData() {
         version: 1,
         plans: [],
         diaryEntries: [],
-        wishlistItems: [],
-        recipes: [],
-        mealPlans: []
+        wishlistItems: []
     };
 }
 
@@ -45,16 +45,41 @@ function cleanCollection(name, value) {
         && item.id.length > 0
         && item.id.length <= 1000
         && ALLOWED_KINDS[name]?.has(item.kind)
-        && !(((name === "plans" && item.kind === KINDS.daily)
-            || (name === "mealPlans" && item.kind === KINDS.meal))
+        && !((name === "plans" && item.kind === KINDS.daily)
             && (!isIsoDate(item.date) || item.date < dailyPlanCutoff)));
 }
 
 export function normalizeData(value) {
     const clean = emptyData();
     if (!isRecord(value)) return clean;
+    // V8.5 briefly stored these records in two new collections. Migrate that
+    // local cache automatically into the original, already-authorized ones.
+    const source = { ...value };
+    const legacyRecipes = Array.isArray(value.recipes) ? value.recipes : [];
+    const legacyMeals = Array.isArray(value.mealPlans) ? value.mealPlans : [];
+    source.wishlistItems = [
+        ...(Array.isArray(value.wishlistItems) ? value.wishlistItems : []),
+        ...legacyRecipes.map((item) => ({
+            ...item,
+            kind: KINDS.wish,
+            recordType: RECORD_TYPES.recipe
+        }))
+    ];
+    source.plans = [
+        ...(Array.isArray(value.plans) ? value.plans : []),
+        ...legacyMeals.map((item) => ({
+            ...item,
+            kind: KINDS.daily,
+            recordType: RECORD_TYPES.meal
+        }))
+    ];
     COLLECTIONS.forEach((name) => {
-        clean[name] = cleanCollection(name, value[name]);
+        const seen = new Set();
+        clean[name] = cleanCollection(name, source[name]).filter((item) => {
+            if (seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+        });
     });
     return clean;
 }
@@ -62,7 +87,13 @@ export function normalizeData(value) {
 export function loadData() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? normalizeData(JSON.parse(raw)) : emptyData();
+        if (!raw) return emptyData();
+        const parsed = JSON.parse(raw);
+        const normalized = normalizeData(parsed);
+        if (Array.isArray(parsed?.recipes) || Array.isArray(parsed?.mealPlans)) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+        }
+        return normalized;
     } catch (error) {
         console.warn("本地数据读取失败。", error);
         return emptyData();
@@ -165,4 +196,4 @@ export function escapeHtml(value = "") {
     })[character]);
 }
 
-export { STORAGE_KEY, COLLECTIONS, KINDS };
+export { STORAGE_KEY, COLLECTIONS, KINDS, RECORD_TYPES };
