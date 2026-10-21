@@ -34,13 +34,13 @@ function setActiveNavigation(route) {
 
 function navigate(route) {
     const next = validRoutes.has(route) ? route : "home";
-    if (window.location.hash === `#${next}`) renderRoute(next);
+    if (window.location.hash === `#${next}`) renderRoute(next, { resetScroll: true });
     else window.location.hash = next;
 }
 
 const context = { toast, navigate };
 
-function renderRoute(route = currentRoute()) {
+function renderRoute(route = currentRoute(), { resetScroll = false } = {}) {
     setActiveNavigation(route);
     if (route === "home") renderHome(main, context);
     if (route === "wishlist") renderWishlist(main, context);
@@ -51,8 +51,10 @@ function renderRoute(route = currentRoute()) {
         recipes: "我的菜谱 · 个人日程"
     };
     document.title = titles[route] || titles.home;
-    main.focus({ preventScroll: true });
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (resetScroll) {
+        main.focus({ preventScroll: true });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    }
 }
 
 document.addEventListener("click", (event) => {
@@ -62,7 +64,7 @@ document.addEventListener("click", (event) => {
     navigate(button.dataset.route);
 });
 
-window.addEventListener("hashchange", () => renderRoute());
+window.addEventListener("hashchange", () => renderRoute(currentRoute(), { resetScroll: true }));
 window.addEventListener("personal-workspace-sync-status", (event) => {
     const { status, message } = event.detail || {};
     const labels = {
@@ -79,7 +81,14 @@ window.addEventListener("personal-workspace-cloud-data", () => {
     window.clearTimeout(cloudRenderTimer);
     cloudRenderTimer = window.setTimeout(() => {
         if (main.querySelector("dialog[open], form:focus-within, textarea:focus")) return;
+        const scrollLeft = window.scrollX;
+        const scrollTop = window.scrollY;
         renderRoute();
+        window.requestAnimationFrame(() => window.scrollTo({
+            left: scrollLeft,
+            top: scrollTop,
+            behavior: "auto"
+        }));
     }, 150);
 });
 
@@ -89,7 +98,7 @@ try {
 } catch (error) {
     console.warn("旧本地缓存清理失败。", error);
 }
-renderRoute();
+renderRoute(currentRoute(), { resetScroll: true });
 
 initializeCloud()
     .then(async () => {
