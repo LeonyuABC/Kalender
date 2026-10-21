@@ -1,5 +1,5 @@
 import { almanacForDate } from "./almanac.js";
-import { CALENDAR_EMOJIS } from "./constants.js";
+import { CALENDAR_EMOJIS, MEAT_CATEGORIES, meatCategory } from "./constants.js";
 import {
     KINDS,
     RECORD_TYPES,
@@ -87,8 +87,10 @@ function renderMealSlots() {
         if (!meal) {
             return `<button class="meal-slot empty" type="button" data-meal-slot="${slot}" aria-label="添加菜品" ${disabled}><span>＋</span></button>`;
         }
-        return `<div class="meal-slot filled">
-            <button type="button" data-meal-slot="${slot}" title="更换菜品" ${disabled}>${escapeHtml(meal.title || "已选菜品")}</button>
+        const recipe = recipeItems().find((item) => item.id === meal.recipeId);
+        const category = meatCategory(recipe?.meatCategory || meal.meatCategory);
+        return `<div class="meal-slot filled ${category.color}">
+            <button type="button" data-meal-slot="${slot}" title="更换菜品" ${disabled}><i class="meal-category-dot" aria-label="${category.label}"></i>${escapeHtml(meal.title || "已选菜品")}</button>
             <button class="meal-remove" type="button" data-remove-meal="${escapeHtml(meal.id)}" aria-label="移除${escapeHtml(meal.title || "菜品")}" ${disabled}>×</button>
         </div>`;
     }).join("");
@@ -97,11 +99,19 @@ function renderMealSlots() {
 function mealPlanFormMarkup(slot) {
     const recipes = recipeItems();
     const current = mealPlansFor(planBoardDate).find((item) => Number(item.slot) === Number(slot));
-    const choices = recipes.length ? recipes.map((recipe, index) => `
-        <label class="recipe-choice">
-            <input type="radio" name="recipeId" value="${escapeHtml(recipe.id)}" ${(current?.recipeId === recipe.id || (!current && index === 0)) ? "checked" : ""} required>
-            <span>${escapeHtml(recipe.title)}</span>
-        </label>`).join("") : '<p class="empty-copy compact-empty">菜谱还是空的，请先到“我的菜谱”添加菜品。</p>';
+    const firstRecipeId = current?.recipeId || recipes[0]?.id;
+    const choices = recipes.length ? MEAT_CATEGORIES.map((category) => {
+        const categoryRecipes = recipes.filter((recipe) => meatCategory(recipe.meatCategory).id === category.id);
+        if (!categoryRecipes.length) return "";
+        return `<section class="recipe-choice-group">
+            <h3><span class="meat-category-badge ${category.color}"><i aria-hidden="true"></i>${category.label}</span><small>${categoryRecipes.length}</small></h3>
+            <div class="recipe-choice-items">${categoryRecipes.map((recipe) => `
+                <label class="recipe-choice ${category.color}">
+                    <input type="radio" name="recipeId" value="${escapeHtml(recipe.id)}" ${firstRecipeId === recipe.id ? "checked" : ""} required>
+                    <span>${escapeHtml(recipe.title)}</span>
+                </label>`).join("")}</div>
+        </section>`;
+    }).join("") : '<p class="empty-copy compact-empty">菜谱还是空的，请先到“我的菜谱”添加菜品。</p>';
     return `
         <form id="meal-plan-form" class="dialog-form">
             <div class="dialog-heading"><div><p class="eyebrow">今日菜品</p><h2>选择一道菜</h2></div><button type="button" class="dialog-x" data-close-meal aria-label="关闭">×</button></div>
@@ -136,6 +146,7 @@ function bindMealPlanDialog(container, context, rerender, slot) {
                 id: existing?.id || generateId(),
                 recipeId: recipe.id,
                 title: safeText(recipe.title, 200),
+                meatCategory: meatCategory(recipe.meatCategory).id,
                 date,
                 slot: Number(slot),
                 createdAt: existing?.createdAt || now,

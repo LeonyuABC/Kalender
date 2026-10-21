@@ -1,4 +1,5 @@
-import { KINDS, RECORD_TYPES, escapeHtml, generateId, loadData, safeText, updateData } from "./storage.js";
+import { MEAT_CATEGORIES, meatCategory } from "./constants.js";
+import { KINDS, RECORD_TYPES, escapeHtml, generateId, loadData, localToday, safeText, updateData } from "./storage.js";
 
 function recipes() {
     return loadData().wishlistItems
@@ -8,10 +9,17 @@ function recipes() {
 
 function formMarkup(item = null) {
     const photo = typeof item?.photoData === "string" && item.photoData.startsWith("data:image/") ? item.photoData : "";
+    const selectedCategory = meatCategory(item?.meatCategory).id;
+    const categoryChoices = MEAT_CATEGORIES.map((category) => `
+        <label class="meat-category-choice ${category.color}">
+            <input type="radio" name="meatCategory" value="${category.id}" ${selectedCategory === category.id ? "checked" : ""}>
+            <span><i aria-hidden="true"></i>${category.label}</span>
+        </label>`).join("");
     return `
         <form id="recipe-form" class="dialog-form">
             <div class="dialog-heading"><div><p class="eyebrow">我的菜谱</p><h2>${item ? "编辑菜谱" : "添加菜谱"}</h2></div><button type="button" class="dialog-x" data-close-recipe aria-label="关闭">×</button></div>
             <label class="field"><span>菜名</span><input name="title" maxlength="200" value="${escapeHtml(item?.title || "")}" required></label>
+            <div class="field"><span>肉类</span><div class="meat-category-picker">${categoryChoices}</div></div>
             <label class="field"><span>做法与备注</span><textarea name="details" rows="7" maxlength="8000">${escapeHtml(item?.details || "")}</textarea></label>
             <label class="field recipe-photo-field"><span>照片（可选，自动压缩）</span><input name="photo" type="file" accept="image/*"></label>
             ${photo ? `<div class="recipe-edit-photo"><img src="${escapeHtml(photo)}" alt="当前菜品照片"><label><input name="removePhoto" type="checkbox"> 删除当前照片</label></div>` : ""}
@@ -22,9 +30,10 @@ function formMarkup(item = null) {
 
 function detailMarkup(item) {
     const photo = typeof item.photoData === "string" && item.photoData.startsWith("data:image/") ? item.photoData : "";
+    const category = meatCategory(item.meatCategory);
     return `
         <article class="recipe-detail">
-            <div class="dialog-heading"><div><p class="eyebrow">菜谱详情</p><h2>${escapeHtml(item.title)}</h2></div><button type="button" class="dialog-x" data-close-detail aria-label="关闭">×</button></div>
+            <div class="dialog-heading"><div><p class="eyebrow">菜谱详情</p><h2>${escapeHtml(item.title)}</h2><span class="meat-category-badge ${category.color}"><i aria-hidden="true"></i>${category.label}</span></div><button type="button" class="dialog-x" data-close-detail aria-label="关闭">×</button></div>
             ${photo ? `<img class="recipe-detail-image" src="${escapeHtml(photo)}" alt="${escapeHtml(item.title)}">` : '<div class="recipe-detail-placeholder" aria-hidden="true">🍽️</div>'}
             <div class="recipe-method"><h3>做法与备注</h3><p>${item.details ? escapeHtml(item.details).replace(/\n/g, "<br>") : "暂时没有备注。"}</p></div>
         </article>`;
@@ -89,6 +98,7 @@ function openForm(container, context, rerender, item = null) {
             const fields = new FormData(form);
             const title = safeText(fields.get("title"), 200);
             const details = safeText(fields.get("details"), 8000);
+            const category = meatCategory(safeText(fields.get("meatCategory"), 20));
             const file = form.elements.photo.files?.[0];
             let photoData = item?.photoData || "";
             if (form.elements.removePhoto?.checked) photoData = "";
@@ -100,6 +110,7 @@ function openForm(container, context, rerender, item = null) {
                 id: item?.id || generateId(),
                 title,
                 details,
+                meatCategory: category.id,
                 photoData,
                 createdAt: item?.createdAt || now,
                 updatedAt: now
@@ -108,6 +119,12 @@ function openForm(container, context, rerender, item = null) {
                 const index = data.wishlistItems.findIndex((entry) => entry.id === next.id);
                 if (index >= 0) data.wishlistItems[index] = next;
                 else data.wishlistItems.push(next);
+                data.plans.forEach((entry) => {
+                    if (entry.recordType !== RECORD_TYPES.meal || entry.recipeId !== next.id) return;
+                    entry.title = next.title;
+                    entry.meatCategory = next.meatCategory;
+                    entry.updatedAt = now;
+                });
                 return data;
             });
             dialog.close();
@@ -138,13 +155,15 @@ export function renderRecipes(container, context) {
     const rerender = () => renderRecipes(container, context);
     const cards = items.length ? items.map((item) => {
         const photo = typeof item.photoData === "string" && item.photoData.startsWith("data:image/") ? item.photoData : "";
+        const category = meatCategory(item.meatCategory);
         return `
             <article class="recipe-card">
+                <button class="recipe-quick-add" type="button" data-add-today="${escapeHtml(item.id)}" aria-label="把${escapeHtml(item.title)}加入今天" title="加入今天">＋</button>
                 <button class="recipe-card-photo" type="button" data-view-recipe="${escapeHtml(item.id)}" aria-label="查看${escapeHtml(item.title)}">
                     ${photo ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(item.title)}">` : '<span aria-hidden="true">🍽️</span>'}
                 </button>
                 <div class="recipe-card-body">
-                    <h3>${escapeHtml(item.title)}</h3>
+                    <div class="recipe-card-title"><h3>${escapeHtml(item.title)}</h3><span class="meat-category-badge ${category.color}"><i aria-hidden="true"></i>${category.label}</span></div>
                     <p>${item.details ? escapeHtml(item.details) : "暂时没有做法备注。"}</p>
                     <div class="card-actions">
                         <button class="text-button" type="button" data-view-recipe="${escapeHtml(item.id)}">查看</button>
@@ -161,6 +180,37 @@ export function renderRecipes(container, context) {
         <dialog id="recipe-detail-dialog" class="app-dialog recipe-detail-dialog"></dialog>`;
 
     container.querySelector("#add-recipe").addEventListener("click", () => openForm(container, context, rerender));
+    container.querySelectorAll("[data-add-today]").forEach((button) => button.addEventListener("click", () => {
+        const item = items.find((entry) => entry.id === button.dataset.addToday);
+        if (!item) return;
+        const date = localToday();
+        const occupied = new Set(loadData().plans
+            .filter((entry) => entry.kind === KINDS.daily && entry.recordType === RECORD_TYPES.meal && entry.date === date)
+            .map((entry) => Number(entry.slot)));
+        const slot = [0, 1, 2, 3].find((value) => !occupied.has(value));
+        if (slot === undefined) {
+            context.toast("今天的菜品已经添加满了");
+            return;
+        }
+        const category = meatCategory(item.meatCategory);
+        const now = new Date().toISOString();
+        updateData((data) => {
+            data.plans.push({
+                kind: KINDS.daily,
+                recordType: RECORD_TYPES.meal,
+                id: generateId(),
+                recipeId: item.id,
+                title: safeText(item.title, 200),
+                meatCategory: category.id,
+                date,
+                slot,
+                createdAt: now,
+                updatedAt: now
+            });
+            return data;
+        });
+        context.toast(`已加入今天 · 第${slot + 1}格`);
+    }));
     container.querySelectorAll("[data-view-recipe]").forEach((button) => button.addEventListener("click", () => {
         const item = items.find((entry) => entry.id === button.dataset.viewRecipe);
         if (item) openDetail(container, item);
